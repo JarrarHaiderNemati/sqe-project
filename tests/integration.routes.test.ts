@@ -223,3 +223,76 @@ test('REAL-IT-11 Gemini route returns generated suggestion from mocked external 
   assert.match(fetchMock.mock.calls[0][0], /gemini-2\.0-flash/);
 });
 
+test('REAL-IT-12 Gemini route returns upstream API error details', async () => {
+  vi.stubEnv('NEXT_PUBLIC_GEMINI_API_KEY', 'fake-key');
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: false,
+    status: 429,
+    json: async () => ({ error: { message: 'quota exceeded' } }),
+  }));
+
+  const { POST } = await import('../src/app/api/gemini/route');
+  const response = await POST(jsonRequest({
+    emergencyType: 'Fire',
+    description: 'Smoke in building',
+    mode: 'helper',
+  }) as never);
+  const body = await responseJson(response);
+
+  assert.equal(response.status, 429);
+  assert.equal(body.error, 'Failed to get AI suggestion');
+  assert.deepEqual(body.details, { error: { message: 'quota exceeded' } });
+});
+
+test('REAL-IT-13 news route returns 500 when GNews API key is missing', async () => {
+  vi.stubEnv('NEXT_PUBLIC_GNEWS_API_KEY', '');
+
+  const { GET } = await import('../src/app/api/news/route');
+  const response = await GET(new Request('http://localhost/api/news'));
+  const body = await responseJson(response);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.error, 'API key not configured');
+});
+
+test('REAL-IT-14 news route returns articles from mocked GNews API', async () => {
+  vi.stubEnv('NEXT_PUBLIC_GNEWS_API_KEY', 'fake-news-key');
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      totalArticles: 1,
+      articles: [{ title: 'Flood warning' }],
+    }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { GET } = await import('../src/app/api/news/route');
+  const response = await GET(new Request('http://localhost/api/news'));
+  const body = await responseJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(body.articles[0].title, 'Flood warning');
+  assert.match(fetchMock.mock.calls[0][0], /gnews\.io\/api\/v4\/search/);
+  assert.match(fetchMock.mock.calls[0][0], /token=fake-news-key/);
+});
+
+test('REAL-IT-15 YouTube route returns videos from mocked YouTube API', async () => {
+  vi.stubEnv('NEXT_PUBLIC_YOUTUBE_API_KEY', 'fake-youtube-key');
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      items: [{ id: { videoId: 'video-1' }, snippet: { title: 'First aid tips' } }],
+    }),
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { GET } = await import('../src/app/api/youtube/route');
+  const response = await GET();
+  const body = await responseJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(body.items[0].snippet.title, 'First aid tips');
+  assert.match(fetchMock.mock.calls[0][0], /youtube\/v3\/search/);
+  assert.match(fetchMock.mock.calls[0][0], /key=fake-youtube-key/);
+});
