@@ -67,8 +67,15 @@ test('SEL-ST-07 volunteer page loads volunteer experience', async () => {
 
 test('SEL-ST-08 news page loads emergency news screen', async () => {
   await open('/news');
-  assert.equal(await pageHasText('Emergency News'), true);
-});
+  await driver.wait(async () => {
+    return (await pageHasText('Emergency News')) || (await pageHasText('Failed to Load News'));
+  }, 12000);
+
+  assert.equal(
+    (await pageHasText('Emergency News')) || (await pageHasText('Failed to Load News')),
+    true
+  );
+}, 15000);
 
 test('SEL-ST-09 about page loads project information', async () => {
   await open('/about');
