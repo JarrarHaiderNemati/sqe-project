@@ -1,3 +1,5 @@
+//Fake server + fake DB
+
 import http from 'node:http';
 import assert from 'node:assert/strict';
 import request from 'supertest';
